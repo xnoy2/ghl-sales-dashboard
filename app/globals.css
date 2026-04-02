@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --card: 0 0% 100%;
+    --card-border: 214 32% 91%;
+  }
+  * { box-sizing: border-box; }
+  body { @apply font-sans text-slate-900 bg-slate-50; }
+  input, select, textarea { @apply outline-none; }
+}
+
+@layer utilities {
+  .card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-sm;
+  }
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm
+           px-4 py-2 rounded-lg transition-colors duration-150 flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm
+           px-4 py-2 rounded-lg border border-slate-200 transition-colors duration-150
+           flex items-center gap-2;
+  }
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.10s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.20s; }
+  .stagger-5 { animation-delay: 0.25s; }
+}

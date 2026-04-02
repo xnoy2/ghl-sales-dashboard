@@ -1,0 +1,12 @@
+.env.local
+.env.local.example
+.env*.local
+node_modules/
+.next/
+out/
+.DS_Store
+*.pem
+node_modules
+.next
+
+#pit-a5498b2e-22a3-49f1-a2cf-d89596e44794
