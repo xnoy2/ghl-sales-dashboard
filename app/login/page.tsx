@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, BarChart3, Eye, EyeOff } from "lucide-react";
+import { Loader2, BarChart3, Eye, EyeOff, AlignCenter } from "lucide-react";
 
 export default function LoginPage() {
   const router   = useRouter();
@@ -35,13 +35,14 @@ export default function LoginPage() {
           <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
-          <span className="text-lg font-semibold text-slate-900">SalesPipeline</span>
+          <span className="text-lg font-semibold text-slate-900">GHL SalesPipeline</span>
         </div>
 
         <div className="card p-8">
-          <h1 className="text-xl font-semibold text-slate-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-slate-500 mb-6">Sign in to your team dashboard</p>
-
+          <h1 className="text-xl font-semibold text-slate-900 mb-1 text-center">
+            LOGIN FORM
+          </h1>
+          <p>  </p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
@@ -49,7 +50,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@company.com"
+                placeholder="juan@bcf.com"
                 required
                 className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg
                            focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all
@@ -91,10 +92,6 @@ export default function LoginPage() {
               {loading ? "Signing in…" : "Sign in"}
             </button>
           </form>
-
-          <p className="text-xs text-slate-400 text-center mt-5">
-            Demo: <span className="font-mono">admin@demo.com</span> / <span className="font-mono">demo1234</span>
-          </p>
         </div>
       </div>
     </main>
