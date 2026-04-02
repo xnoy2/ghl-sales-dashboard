@@ -25,7 +25,7 @@ export default function PipelineBoard({ stages }: { stages: PipelineStage[] }) {
               </div>
 
               {/* Lead cards */}
-              <div className="space-y-2 min-h-[80px]">
+              <div className="space-y-2 min-h-[80px] max-h-[300px] overflow-y-auto pr-1">
                 {stage.leads.map(lead => (
                   <LeadCard key={lead.id} lead={lead} onMove={setSelected} />
                 ))}
