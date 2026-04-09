@@ -10,9 +10,6 @@ import type {
   Lead, StageId, DashboardStats, ActivityItem,
   FollowUpAlert, TeamMember,
 } from "@/types";
-import {
-  mockLeads, mockStats, mockActivity, mockAlerts, mockTeam,
-} from "@/lib/mock-data";
 import { ACCOUNTS, type AccountType } from "@/lib/accounts";
 // ─── Config ───────────────────────────────────────────────────
 
@@ -178,7 +175,6 @@ export async function getOpportunities(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<Lead[]> {
-  if (USE_MOCK) return mockLeads;
 
   if (!pipelineId) {
     throw new Error("pipelineId is required in getOpportunities()");
@@ -235,7 +231,6 @@ oppData.opportunities.forEach((o: any) => {
 export async function getLeads(
   account: AccountType = "BCF"
 ): Promise<Lead[]> {
-  if (USE_MOCK) return mockLeads;
 
   const res = await fetch(
     `${BASE}/contacts/?locationId=${ACCOUNTS[account].locationId}&limit=100`,
@@ -375,7 +370,6 @@ export async function updateOpportunityStage(
 export async function getTeam(
   account: AccountType = "BCF"
 ): Promise<TeamMember[]> {
-  if (USE_MOCK) return mockTeam;
 
   const res = await fetch(
     `${BASE}/users/?locationId=${ACCOUNTS[account].locationId}`,
@@ -407,7 +401,6 @@ export async function getDashboardStats(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<DashboardStats> {
-  if (USE_MOCK) return mockStats;
 
   const opps = await getOpportunities(pipelineId, account);// ✅ FIX
   const today = new Date().toDateString();
@@ -439,7 +432,6 @@ export async function getActivity(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<ActivityItem[]> {
-  if (USE_MOCK) return mockActivity;
 
   const opps = await getOpportunities(pipelineId, account); // ✅
   return opps
@@ -465,7 +457,6 @@ export async function getAlerts(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<FollowUpAlert[]> {
-  if (USE_MOCK) return mockAlerts;
 
   const opps = await getOpportunities(pipelineId, account); // ✅
   return opps
