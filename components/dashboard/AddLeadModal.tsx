@@ -1,95 +1,248 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
+import { STAGE_MAP } from "@/lib/stageMap";
+import { USER_MAP } from "@/lib/users";
+import { CURRENCY } from "@/lib/currency";
 
-export default function AddLeadModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm]     = useState({ name: "", email: "", phone: "", stage: "new", value: "" });
+export default function AddLeadModal({
+  stages,
+  pipelineId,
+  onClose,
+  onCreated,
+}: {
+  stages: { label: string; value: string }[];
+  pipelineId: string;
+  onClose: () => void;
+  onCreated?: (lead: any) => void;
+}) {
+  const searchParams = useSearchParams();
+
+  // ✅ DEFINE FIRST
+  const account =
+    searchParams.get("account") === "BGR" ? "BGR" : "BCF";
+
+  const pipeline =
+    searchParams.get("pipeline") === "SALES" ? "SALES" : "LEAD";
+
+  // ✅ THEN USE
+  const stageOptions = STAGE_MAP[account][pipeline];
+
+  const userOptions = USER_MAP[account];
+
+  // ❌ DO NOT redefine pipelineId
+
+  const [form, setForm] = useState({
+  name: "",
+  email: "",
+  phone: "",
+  value: "",
+  stageId: "",
+  tags: "",
+});
+
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
-  function update(key: string, val: string) {
-    setForm(f => ({ ...f, [key]: val }));
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setLoading(true);
-    // TODO: POST to /api/leads when GHL is connected
-    await new Promise(r => setTimeout(r, 800)); // mock delay
-    setLoading(false);
-    setSuccess(true);
-    setTimeout(onClose, 1000);
+    setError("");
+
+    // 🔥 LOADING TOAST
+    const toastId = toast.loading("Creating lead...");
+
+    try {
+      if (!pipelineId) {
+        throw new Error("Pipeline is not configured");
+      }
+
+      if (!form.name || !form.email) {
+        throw new Error("Name and email are required");
+      }
+
+      if (!form.stageId) {
+        throw new Error("Please select a stage");
+      }
+
+      const tempLead = {
+        id: "temp-" + Date.now(),
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        value: Number(form.value || 0),
+        stage: form.stageId,
+        assignedTo: "You",
+        lastActivity: new Date().toISOString(),
+        tags: form.tags
+          ? form.tags.split(",").map((t) => t.trim())
+          : [],
+        daysInStage: 0,
+      };
+console.log("DEBUG:", {
+  account,
+  pipeline,
+  pipelineId,
+});
+
+      // ✅ INSTANT UI UPDATE
+      onCreated?.(tempLead);
+
+      // 🚀 API CALL
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          value: Number(form.value || 0),
+          stageId: form.stageId,
+          pipelineId,
+          tags: form.tags ? [form.tags] : [],
+          account,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create lead");
+      }
+
+      // ✅ SUCCESS TOAST
+      toast.success("Lead added successfully", { id: toastId });
+
+      // ✅ CLOSE MODAL
+      setTimeout(() => {
+        onClose();
+      }, 500);
+
+    } catch (err: any) {
+      console.error("ADD LEAD ERROR:", err);
+      console.log("SENDING STAGE:", form.stageId);
+      // ❌ ERROR TOAST
+      toast.error(err.message || "Failed to add lead", { id: toastId });
+
+      setError(err.message || "Failed to add lead");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900">Add New Lead</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white w-full max-w-md rounded-xl p-6 space-y-4 shadow-xl relative">
+
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 text-lg"
+        >
+          ✕
+        </button>
+
+        <h2 className="text-lg font-semibold">
+          Add Lead ({pipeline})
+        </h2>
+
+        <input
+          placeholder="Enter full name"
+          className="border border-slate-300 px-3 py-2 rounded-lg w-full"
+          value={form.name}
+          onChange={(e) =>
+            setForm({ ...form, name: e.target.value })
+          }
+        />
+
+        <input
+          placeholder="Enter email address"
+          className="border border-slate-300 px-3 py-2 rounded-lg w-full"
+          value={form.email}
+          onChange={(e) =>
+            setForm({ ...form, email: e.target.value })
+          }
+        />
+
+        <input
+          placeholder="Enter phone number"
+          className="border border-slate-300 px-3 py-2 rounded-lg w-full"
+          value={form.phone}
+          onChange={(e) =>
+            setForm({ ...form, phone: e.target.value })
+          }
+        />
+        <div className="space-y-1">
+
+        <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+          
+          {/* £ PREFIX */}
+          <span className="px-3 text-slate-500 bg-slate-50 border-r flex items-center">
+            {CURRENCY.symbol}
+          </span>
+
+          {/* INPUT */}
+          <input
+            type="number"
+            className="w-full px-3 py-2 outline-none"
+            value={form.value}
+            onChange={(e) => {
+              setForm({
+                ...form,
+                value: e.target.value, // ✅ string
+              });
+            }}
+          />
+        </div>
+      </div>
+        
+        <select
+          className="border border-slate-300 px-3 py-2 rounded-lg w-full"
+          value={form.stageId}
+          onChange={(e) =>
+            setForm({ ...form, stageId: e.target.value })
+          }
+        >
+          <option value="">Select stage</option>
+
+          {stageOptions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+
+        <input
+          placeholder="Tags (e.g. website, wishlist)"
+          className="border border-slate-300 px-3 py-2 rounded-lg w-full"
+          value={form.tags}
+          onChange={(e) =>
+            setForm({ ...form, tags: e.target.value })
+          }
+        />
+
+        {error && (
+          <p className="text-red-500 text-sm">{error}</p>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="w-1/3 border border-slate-300 rounded-lg py-2 text-sm"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-2/3 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm disabled:opacity-50"
+          >
+            {loading ? "Creating..." : "Add Lead"}
           </button>
         </div>
-
-        {success ? (
-          <div className="px-6 py-10 text-center">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="text-emerald-600 text-xl">✓</span>
-            </div>
-            <p className="font-medium text-slate-900">Lead added!</p>
-            <p className="text-sm text-slate-500 mt-1">Syncing to GHL…</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-            {[
-              { key: "name",  label: "Full Name",    type: "text",  placeholder: "Juan Carlos" },
-              { key: "email", label: "Email",         type: "email", placeholder: "juan@company.com" },
-              { key: "phone", label: "Phone",         type: "tel",   placeholder: "+1 555 0100" },
-              { key: "value", label: "Deal Value ($)", type: "number",placeholder: "5000" },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
-                <input
-                  type={f.type}
-                  placeholder={f.placeholder}
-                  value={(form as any)[f.key]}
-                  onChange={e => update(f.key, e.target.value)}
-                  required={f.key !== "value"}
-                  className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg
-                             focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                             bg-white text-slate-900 placeholder-slate-400 transition-all"
-                />
-              </div>
-            ))}
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Stage</label>
-              <select
-                value={form.stage}
-                onChange={e => update("stage", e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg
-                           focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                           bg-white text-slate-900 transition-all"
-              >
-                <option value="new">New Lead</option>
-                <option value="contacted">Contacted</option>
-                <option value="quoted">Quoted</option>
-                <option value="follow_up">Follow-Up</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? "Adding…" : "Add Lead"}
-              </button>
-              <button type="button" onClick={onClose} className="btn-secondary px-4">Cancel</button>
-            </div>
-          </form>
-        )}
       </div>
     </div>
   );

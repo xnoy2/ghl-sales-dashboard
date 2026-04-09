@@ -1,42 +1,62 @@
 import { NextResponse } from "next/server";
+import { addNotification } from "@/lib/notifications";
+import { pusherServer } from "@/lib/pusher"; // ✅ ADD
 
-/**
- * POST /api/webhooks/ghl
- * ─────────────────────────────────────────────────────
- * Receives real-time events from GoHighLevel webhooks.
- * Configure in GHL → Settings → Integrations → Webhooks
- *
- * Supported events:
- *   - ContactCreate
- *   - ContactUpdate
- *   - OpportunityCreate
- *   - OpportunityStageUpdate
- *
- * Phase 2: pipe these into a Pusher/Ably channel so the
- *          frontend updates without polling.
- */
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
-    const event   = payload.type ?? "unknown";
+    const event = payload.type ?? "unknown";
 
     console.log("[GHL Webhook]", event, payload);
 
-    // TODO Phase 2: broadcast to Pusher
-    // await pusher.trigger("dashboard", event, payload);
+    let message = "";
 
     switch (event) {
       case "ContactCreate":
-        // invalidate leads cache
+        message = "👤 New contact created";
         break;
+
+      case "ContactUpdate":
+        message = "✏️ Contact updated";
+        break;
+
+      case "OpportunityCreate":
+        message = "💼 New opportunity created";
+        break;
+
       case "OpportunityStageUpdate":
-        // push stage change to clients
+        message = "📊 Opportunity stage changed";
         break;
+
+      default:
+        message = `📩 Event: ${event}`;
+        break;
+    }
+
+    // ✅ SAVE (your existing)
+    addNotification(message);
+
+    // 🚀 🚀 🚀 CRITICAL PART
+    await pusherServer.trigger("dashboard", "new-event", {
+      id: Date.now().toString(),
+      text: message,
+      createdAt: Date.now(),
+    });
+
+        // ✅ KEEP YOUR EXISTING STRUCTURE (UNCHANGED)
+    switch (event) {
+      case "ContactCreate":
+        break;
+
+      case "OpportunityStageUpdate":
+        break;
+
       default:
         break;
     }
 
     return NextResponse.json({ received: true });
+
   } catch (err) {
     console.error("[GHL Webhook error]", err);
     return NextResponse.json({ error: "Webhook error" }, { status: 500 });

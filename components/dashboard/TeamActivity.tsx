@@ -14,34 +14,47 @@ export default function TeamActivity({ team }: { team: TeamMember[] }) {
   return (
     <div className="card p-5">
       <h2 className="text-sm font-semibold text-slate-900 mb-4">Team Activity</h2>
-      <div className="space-y-4">
+
+      {/* ✅ SCROLL CONTAINER */}
+      <div className="max-h-[220px] overflow-y-auto pr-2 space-y-4">
         {team.map((member, i) => {
           const pct = Math.round((member.deals / member.target) * 100);
+
           return (
             <div key={member.id} className="flex items-center gap-3">
-              <div className={clsx(
-                "w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0",
-                AVATAR_COLORS[i % AVATAR_COLORS.length]
-              )}>
+              <div
+                className={clsx(
+                  "w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0",
+                  AVATAR_COLORS[i % AVATAR_COLORS.length]
+                )}
+              >
                 {member.initials}
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-slate-800">{member.name}</span>
+                  <span className="text-sm font-medium text-slate-800">
+                    {member.name}
+                  </span>
                   <span className="text-xs text-slate-500">
                     {member.deals}/{member.target} deals
                   </span>
                 </div>
+
                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className={clsx("h-full rounded-full transition-all duration-700", BAR_COLORS[i % BAR_COLORS.length])}
+                    className={clsx(
+                      "h-full rounded-full transition-all duration-700",
+                      BAR_COLORS[i % BAR_COLORS.length]
+                    )}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
               </div>
 
-              <span className="text-xs font-semibold text-slate-600 w-8 text-right">{pct}%</span>
+              <span className="text-xs font-semibold text-slate-600 w-8 text-right">
+                {pct}%
+              </span>
             </div>
           );
         })}

@@ -13,16 +13,22 @@ import type {
 import {
   mockLeads, mockStats, mockActivity, mockAlerts, mockTeam,
 } from "@/lib/mock-data";
-
+import { ACCOUNTS, type AccountType } from "@/lib/accounts";
 // ─── Config ───────────────────────────────────────────────────
 
 const BASE     = "https://services.leadconnectorhq.com";
 const VERSION  = "2021-07-28";
-const USE_MOCK = !process.env.GHL_API_KEY;
+const USE_MOCK = false; // force real API
 
-function ghlHeaders(): HeadersInit {
+// ─── Pipeline Config ────────────────────────────────────────
+const PIPELINES = {
+  LEAD: process.env.LEAD_PIPELINE_ID!,
+  SALES: process.env.SALES_PIPELINE_ID!,
+};
+
+function ghlHeaders(account: AccountType = "BCF"): HeadersInit {
   return {
-    Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+    Authorization: `Bearer ${ACCOUNTS[account].apiKey}`,
     "Content-Type": "application/json",
     Version: VERSION,
   };
@@ -48,14 +54,43 @@ function buildUserMap(users: any[]) {
 // ─────────────────────────────────────────────────────────────
 
 const STAGE_MAP: Record<string, StageId> = {
-  "f80d138a-40fc-4b20-82cf-64c633f6a9a0": "new",
-  "1dd55e97-97c8-4370-bb36-4c9d7cd69032": "contacted",
-  "01f8a6c6-6221-4ce5-b252-44195118c895": "quoted",
-  "29ce6ae3-2164-4510-b96e-c76216c34813": "follow_up",
-  "f4c24408-dba0-4e7e-8094-2b32171789c9": "closed",
+  // =========================
+  // 🔵 BCF - LEAD
+  // =========================
+  "539b32c9-c336-487c-860f-4c3e72bd592b": "new",
+  "03640705-9f51-4fad-9960-64643455080c": "warm",
+  "bdcc78fb-27e1-43ae-bbe3-846ce11f69d7": "quote",
+  "07f004c2-171c-4b80-9a73-24a75bf89d82": "no_response",
+
+  // =========================
+  // 🟢 BCF - SALES
+  // =========================
+  "03a30a23-a157-4822-aac7-cec971b21894": "deposit",
+  "27573f51-717e-4c31-bc8a-b7f790530f97": "install",
+  "63432c43-59eb-4c8b-ab37-d4681cedfb9c": "scheduled",
+  "cbc54bef-9196-47ac-b86f-2172508bdabc": "won",
+  "90caa9cb-fbdf-4334-a906-a0e46acb67ae": "lost",
+
+  // =========================
+  // 🔵 BGR - LEAD ✅ NEW
+  // =========================
+  "e387947b-974e-4bda-a8bb-f09c1440b411": "new",
+  "0d3f8b03-fec6-4645-968f-18a743d7e7ff": "warm",
+  "7165ab92-e478-4c20-82e1-8a5d3d503e64": "quote",
+  "7abd1803-1126-4781-a3a8-c9d57ba51e07": "no_response",
+
+  // =========================
+  // 🟢 BGR - SALES ✅ NEW
+  // =========================
+  "6ab097e7-5b51-4c05-8ca6-4a78abd36481": "deposit",
+  "b4578cd5-a216-492a-b551-7a5507d88436": "install",
+  "fc40247f-ed65-4027-a2b4-da9310c1a9c9": "scheduled",
+  "1d1d27bb-55a4-468d-9adb-9575863d0d84": "won",
+  "bc0b9333-b61a-4b95-aea3-24a2d3f0b439": "lost",
 };
 
 function mapStage(ghlStageId: string): StageId {
+  if (!ghlStageId) return "new";
   return STAGE_MAP[ghlStageId] ?? "new";
 }
 
@@ -74,12 +109,15 @@ function nameInitials(first = "", last = ""): string {
 function mapOpportunity(opp: any, userMap: Record<string, string>): Lead {
   return {
     id: opp.id,
+    contactId: opp.contactId,
+
     name: opp.contact?.name ?? opp.name ?? "Unknown",
     email: opp.contact?.email ?? "",
     phone: opp.contact?.phone ?? "",
-    stage: mapStage(opp.pipelineStageId),
 
-    // ✅ FIX: Convert ID → Name
+    stage: mapStage(opp.pipelineStageId),   // UI label
+    stageId: opp.pipelineStageId,           // ✅ REAL GHL ID
+
     assignedTo:
       userMap[opp.assignedTo] ||
       opp.assignedTo?.name ||
@@ -98,39 +136,68 @@ function mapOpportunity(opp: any, userMap: Record<string, string>): Lead {
 function mapContact(c: any): Lead {
   return {
     id: c.id,
+    contactId: c.id,
+
     name: c.contactName ?? c.name ?? "Unknown",
     email: c.email ?? "",
     phone: c.phone ?? "",
+
     stage: "new",
+    stageId: "", // ✅ REQUIRED FIX
+
     assignedTo: c.assignedTo ?? "Unassigned",
     value: 0,
-    lastActivity: c.dateUpdated ?? c.dateAdded ?? new Date().toISOString(),
+    lastActivity:
+      c.dateUpdated ?? c.dateAdded ?? new Date().toISOString(),
     tags: c.tags ?? [],
     daysInStage: 0,
   };
 }
 
+export async function findOpportunityByContact(
+  contactId: string,
+  pipelineId: string,
+  account: AccountType
+) {
+  const res = await fetch(
+    `${BASE}/opportunities/search?contact_id=${contactId}&pipeline_id=${pipelineId}`,
+    {
+      headers: ghlHeaders(account),
+    }
+  );
+
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  return data?.opportunities?.[0] || null;
+}
 // ─────────────────────────────────────────────────────────────
 // GET /opportunities/search
 // ─────────────────────────────────────────────────────────────
-export async function getOpportunities(): Promise<Lead[]> {
+export async function getOpportunities(
+  pipelineId?: string,
+  account: AccountType = "BCF"
+): Promise<Lead[]> {
   if (USE_MOCK) return mockLeads;
 
+  if (!pipelineId) {
+    throw new Error("pipelineId is required in getOpportunities()");
+  }
+
   const params = new URLSearchParams({
-    location_id: process.env.GHL_LOCATION_ID!,
-    pipeline_id: process.env.GHL_PIPELINE_ID!,
+    location_id: ACCOUNTS[account].locationId,
+    pipeline_id: pipelineId,
     limit: "100",
   });
 
-  // ✅ Fetch opportunities + users
   const [oppRes, userRes] = await Promise.all([
     fetch(`${BASE}/opportunities/search?${params}`, {
-      headers: ghlHeaders(),
+      headers: ghlHeaders(account),
       next: { revalidate: 30 },
     }),
-    fetch(`${BASE}/users/?locationId=${process.env.GHL_LOCATION_ID}`, {
-      headers: ghlHeaders(),
-    }),
+    fetch(`${BASE}/users/?locationId=${ACCOUNTS[account].locationId}`, {
+    headers: ghlHeaders(account),
+  }),
   ]);
 
   if (!oppRes.ok) {
@@ -145,10 +212,15 @@ export async function getOpportunities(): Promise<Lead[]> {
 
   const oppData = await oppRes.json();
   const userData = await userRes.json();
-
+oppData.opportunities.forEach((o: any) => {
+  console.log("STAGE DEBUG:", {
+    name: o.name,
+    stageId: o.pipelineStageId,
+  });
+});
   const userMap = buildUserMap(userData.users || []);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  console.log("RAW OPPS:", oppData.opportunities);
+  
   return (oppData.opportunities ?? []).map((o: any) =>
     mapOpportunity(o, userMap)
   );
@@ -160,13 +232,16 @@ export async function getOpportunities(): Promise<Lead[]> {
 
 // KEEP EVERYTHING BELOW EXACTLY AS IS
 
-export async function getLeads(): Promise<Lead[]> {
+export async function getLeads(
+  account: AccountType = "BCF"
+): Promise<Lead[]> {
   if (USE_MOCK) return mockLeads;
 
   const res = await fetch(
-    `${BASE}/contacts/?locationId=${process.env.GHL_LOCATION_ID}&limit=100`,
-    { headers: ghlHeaders(), next: { revalidate: 30 } }
+    `${BASE}/contacts/?locationId=${ACCOUNTS[account].locationId}&limit=100`,
+    { headers: ghlHeaders(account), next: { revalidate: 30 } }
   );
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`GHL getContacts ${res.status}: ${txt}`);
@@ -176,13 +251,20 @@ export async function getLeads(): Promise<Lead[]> {
   return (data.contacts ?? []).map((c: any) => mapContact(c));
 }
 
+
 // (rest unchanged…)
 // ─────────────────────────────────────────────────────────────
 // POST /contacts/  →  create a new contact
 // ─────────────────────────────────────────────────────────────
-export async function createContact(payload: {
-  name: string; email: string; phone: string;
-}): Promise<{ id: string }> {
+export async function createContact(
+  payload: {
+    name: string;
+    email: string;
+    phone?: string;
+    tags?: string[];
+  },
+  account: AccountType = "BCF"
+): Promise<{ id: string }> {
   if (USE_MOCK) return { id: `mock_${Date.now()}` };
 
   const [firstName, ...rest] = payload.name.trim().split(" ");
@@ -190,13 +272,14 @@ export async function createContact(payload: {
 
   const res = await fetch(`${BASE}/contacts/`, {
     method:  "POST",
-    headers: ghlHeaders(),
+    headers: ghlHeaders(account),
     body: JSON.stringify({
       firstName,
       lastName,
       email:      payload.email,
       phone:      payload.phone,
-      locationId: process.env.GHL_LOCATION_ID,
+      tags:       payload.tags || [],
+      locationId: ACCOUNTS[account].locationId,
     }),
   });
   if (!res.ok) {
@@ -210,31 +293,56 @@ export async function createContact(payload: {
 // ─────────────────────────────────────────────────────────────
 // POST /opportunities/  →  create opportunity in pipeline
 // ─────────────────────────────────────────────────────────────
-export async function createOpportunity(payload: {
-  contactId: string;
-  name:      string;
-  stageId:   string;
-  value?:    number;
-}): Promise<{ id: string }> {
+export async function createOpportunity(
+  payload: {
+    contactId: string;
+    name: string;
+    stageId?: string;   // ✅ optional
+    stage?: string;     // ✅ NEW (from frontend)
+    pipelineId?: string;
+    assignedTo?: string;
+    value?: number;
+  },
+  account: AccountType = "BCF"
+): Promise<{ id: string }> {
   if (USE_MOCK) return { id: `mock_opp_${Date.now()}` };
 
+  // ✅ SUPPORT BOTH stageId and stage
+  const finalStageId = payload.stageId || payload.stage;
+
+  if (!finalStageId) {
+    throw new Error("Missing stageId / stage");
+  }
+
+  if (!payload.pipelineId) {
+    throw new Error("Missing pipelineId");
+  }
+
+  const body = {
+    pipelineId: payload.pipelineId,
+    locationId: ACCOUNTS[account].locationId,
+    name: payload.name,
+    pipelineStageId: finalStageId,
+    contactId: payload.contactId,
+    monetaryValue: payload.value ?? 0,
+    status: "open",
+    assignedTo: payload.assignedTo || undefined, 
+  };
+
+  console.log("CREATE OPPORTUNITY PAYLOAD:", body); // 🔥 debug
+
   const res = await fetch(`${BASE}/opportunities/`, {
-    method:  "POST",
-    headers: ghlHeaders(),
-    body: JSON.stringify({
-      pipelineId:      process.env.GHL_PIPELINE_ID,
-      locationId:      process.env.GHL_LOCATION_ID,
-      name:            payload.name,
-      pipelineStageId: payload.stageId,
-      contactId:       payload.contactId,
-      monetaryValue:   payload.value ?? 0,
-      status:          "open",
-    }),
+    method: "POST",
+    headers: ghlHeaders(account),
+    body: JSON.stringify(body),
   });
+
   if (!res.ok) {
     const txt = await res.text();
+    console.error("GHL ERROR RESPONSE:", txt);
     throw new Error(`GHL createOpportunity ${res.status}: ${txt}`);
   }
+
   const data = await res.json();
   return { id: data.opportunity?.id ?? data.id };
 }
@@ -244,15 +352,17 @@ export async function createOpportunity(payload: {
 // ─────────────────────────────────────────────────────────────
 export async function updateOpportunityStage(
   opportunityId: string,
-  ghlStageId:    string
+  ghlStageId: string,
+  account: AccountType = "BCF"
 ): Promise<void> {
   if (USE_MOCK) return;
 
   const res = await fetch(`${BASE}/opportunities/${opportunityId}`, {
-    method:  "PUT",
-    headers: ghlHeaders(),
+    method: "PUT",
+    headers: ghlHeaders(account),
     body: JSON.stringify({ pipelineStageId: ghlStageId }),
   });
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`GHL updateStage ${res.status}: ${txt}`);
@@ -262,49 +372,62 @@ export async function updateOpportunityStage(
 // ─────────────────────────────────────────────────────────────
 // GET /users/  →  team members
 // ─────────────────────────────────────────────────────────────
-export async function getTeam(): Promise<TeamMember[]> {
+export async function getTeam(
+  account: AccountType = "BCF"
+): Promise<TeamMember[]> {
   if (USE_MOCK) return mockTeam;
 
   const res = await fetch(
-    `${BASE}/users/?locationId=${process.env.GHL_LOCATION_ID}`,
-    { headers: ghlHeaders(), next: { revalidate: 300 } }
+    `${BASE}/users/?locationId=${ACCOUNTS[account].locationId}`,
+    { headers: ghlHeaders(account), next: { revalidate: 300 } }
   );
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`GHL getUsers ${res.status}: ${txt}`);
   }
+
   const data = await res.json();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data.users ?? []).map((u: any): TeamMember => ({
-    id:       u.id,
-    name:     u.name ?? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
+    id: u.id,
+    name: u.name ?? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim(),
     initials: nameInitials(u.firstName, u.lastName),
-    role:     u.roles?.type === "admin" ? "admin" : "agent",
-    deals:    0,
-    target:   10,
-    avatar:   u.profilePhoto,
+    role: u.roles?.type === "admin" ? "admin" : "agent",
+    deals: 0,
+    target: 10,
+    avatar: u.profilePhoto,
   }));
 }
 
 // ─────────────────────────────────────────────────────────────
 // Dashboard stats  →  aggregated from opportunities
 // ─────────────────────────────────────────────────────────────
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(
+  pipelineId?: string,
+  account: AccountType = "BCF"
+): Promise<DashboardStats> {
   if (USE_MOCK) return mockStats;
 
-  const opps  = await getOpportunities();
+  const opps = await getOpportunities(pipelineId, account);// ✅ FIX
   const today = new Date().toDateString();
 
   return {
-    newLeadsToday:      opps.filter(o => new Date(o.lastActivity).toDateString() === today).length,
-    contacted:          opps.filter(o => o.stage === "contacted").length,
-    quoted:             opps.filter(o => o.stage === "quoted").length,
-    followUps:          opps.filter(o => o.stage === "follow_up").length,
-    closedDeals:        opps.filter(o => o.stage === "closed").length,
+    newLeadsToday: opps.filter(
+      o => new Date(o.lastActivity).toDateString() === today
+    ).length,
+
+    contacted: opps.filter(o => o.stage === "warm").length,
+    quoted: opps.filter(o => o.stage === "quote").length,
+    followUps: opps.filter(o => o.stage === "no_response").length,
+    closedDeals: opps.filter(o => o.stage === "won").length,
+
     totalPipelineValue: opps.reduce((s, o) => s + o.value, 0),
-    conversionRate:     opps.length
-      ? Math.round((opps.filter(o => o.stage === "closed").length / opps.length) * 100)
+
+    conversionRate: opps.length
+      ? Math.round(
+          (opps.filter(o => o.stage === "won").length / opps.length) * 100
+        )
       : 0,
   };
 }
@@ -312,19 +435,23 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 // ─────────────────────────────────────────────────────────────
 // Activity feed  →  most recently updated opportunities
 // ─────────────────────────────────────────────────────────────
-export async function getActivity(): Promise<ActivityItem[]> {
+export async function getActivity(
+  pipelineId?: string,
+  account: AccountType = "BCF"
+): Promise<ActivityItem[]> {
   if (USE_MOCK) return mockActivity;
 
-  const opps = await getOpportunities();
+  const opps = await getOpportunities(pipelineId, account); // ✅
   return opps
     .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
     .slice(0, 10)
     .map((o, i): ActivityItem => ({
       id:        `act_${i}`,
-      type:      o.stage === "closed"    ? "closed"
-               : o.stage === "quoted"    ? "quoted"
-               : o.stage === "follow_up" ? "follow_up"
-               : "contacted",
+      type:
+          o.stage === "won" ? "closed"
+          : o.stage === "quote" ? "quoted"
+          : o.stage === "no_response" ? "follow_up"
+          : "contacted",
       leadName:  o.name,
       actor:     o.assignedTo,
       timestamp: o.lastActivity,
@@ -334,12 +461,15 @@ export async function getActivity(): Promise<ActivityItem[]> {
 // ─────────────────────────────────────────────────────────────
 // Follow-up alerts  →  leads stuck in follow_up stage
 // ─────────────────────────────────────────────────────────────
-export async function getAlerts(): Promise<FollowUpAlert[]> {
+export async function getAlerts(
+  pipelineId?: string,
+  account: AccountType = "BCF"
+): Promise<FollowUpAlert[]> {
   if (USE_MOCK) return mockAlerts;
 
-  const opps = await getOpportunities();
+  const opps = await getOpportunities(pipelineId, account); // ✅
   return opps
-    .filter(o => o.stage === "follow_up" && o.daysInStage >= 1)
+    .filter(o => o.stage === "no_response" && o.daysInStage >= 1)
     .sort((a, b) => b.daysInStage - a.daysInStage)
     .map((o, i): FollowUpAlert => ({
       id:          `alert_${i}`,

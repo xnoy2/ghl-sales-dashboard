@@ -1,15 +1,26 @@
 // ─── Pipeline / Contacts ─────────────────────────────────────────────────────
 
-export type StageId = "new" | "contacted" | "quoted" | "follow_up" | "closed";
+export type StageId =
+  | "new"
+  | "warm"
+  | "quote"
+  | "no_response"
+  | "deposit"
+  | "install"
+  | "scheduled"
+  | "won"
+  | "lost";
 
 export interface Lead {
   id: string;
+  contactId: string;
   name: string;
   email: string;
   phone: string;
-  stage: StageId;
-  assignedTo: string;       // team member name
-  value: number;            // deal value $
+  stage: string;      // UI (optional)
+  stageId: string;    // ✅ ADD THIS (GHL UUID)
+  assignedTo: string;
+  value: number;
   lastActivity: string;     // ISO date string
   tags: string[];
   daysInStage: number;

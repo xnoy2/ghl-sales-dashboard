@@ -5,19 +5,24 @@ import { useState } from "react";
 import { Plus, LayoutList, MessageSquare, Calendar } from "lucide-react";
 import AddLeadModal from "./AddLeadModal";
 
-export default function QuickActions() {
+
+export default function QuickActions({
+  onAddLead,
+}: {
+  onAddLead: () => void;
+}) {
   const [addOpen, setAddOpen] = useState(false);
 
   return (
     <>
       <div className="flex flex-wrap gap-3 pb-6">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="btn-primary"
-        >
-          <Plus className="w-4 h-4" />
-          Add New Lead
-        </button>
+       <button
+        onClick={onAddLead}
+        className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-3 py-2 rounded-lg shadow-sm hover:shadow transition flex items-center gap-2"
+      >
+        <Plus className="w-4 h-4" />
+        Add New Lead
+      </button>
 
         <Link
         href="https://app.gohighlevel.com/v2/location/GSxspezlKiWYWE604ot9/opportunities/list"
@@ -46,8 +51,6 @@ export default function QuickActions() {
         View Calendar
       </Link>
       </div>
-
-      {addOpen && <AddLeadModal onClose={() => setAddOpen(false)} />}
     </>
   );
 }
