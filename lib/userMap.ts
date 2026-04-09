@@ -5,4 +5,5 @@ export const USER_EMAIL_TO_GHL_ID = {
 
   // BGR
   "kevin@bgr.com": "opXAjfdffILLO1cdxe7W",
+  "mie@bcf.com": "LWJNKLN7L02j0NUENAWN",
 };
