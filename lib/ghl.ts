@@ -132,6 +132,7 @@ function mapContact(c: any): Lead {
     stage: "new",
     stageId: "", // ✅ REQUIRED FIX
 
+    assignedToId: c.assignedTo ?? "",
     assignedTo: c.assignedTo ?? "Unassigned",
     value: 0,
     lastActivity:
