@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
+import { updateOpportunityStage } from "@/lib/ghl";
+import type { AccountType } from "@/lib/accounts";
 
 export async function POST(req: Request) {
-  const { leadId, stage } = await req.json();
+  try {
+    const { opportunityId, stageId, account } = await req.json();
 
-  await fetch(
-    `https://services.leadconnectorhq.com/opportunities/${leadId}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        pipelineStageId: stage,
-      }),
+    if (!opportunityId || !stageId || !account) {
+      return NextResponse.json(
+        { error: "Missing opportunityId, stageId, or account" },
+        { status: 400 }
+      );
     }
-  );
 
-  return NextResponse.json({ success: true });
+    await updateOpportunityStage(opportunityId, stageId, account as AccountType);
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error("MOVE OPPORTUNITY ERROR:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }

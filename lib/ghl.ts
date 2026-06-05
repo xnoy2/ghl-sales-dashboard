@@ -7,7 +7,7 @@
  */
 
 import type {
-  Lead, StageId, DashboardStats, ActivityItem,
+  Lead, DashboardStats, ActivityItem,
   FollowUpAlert, TeamMember,
 } from "@/types";
 import { ACCOUNTS, type AccountType } from "@/lib/accounts";
@@ -17,11 +17,6 @@ const BASE     = "https://services.leadconnectorhq.com";
 const VERSION  = "2021-07-28";
 const USE_MOCK = false; // force real API
 
-// ─── Pipeline Config ────────────────────────────────────────
-const PIPELINES = {
-  LEAD: process.env.LEAD_PIPELINE_ID!,
-  SALES: process.env.SALES_PIPELINE_ID!,
-};
 
 function ghlHeaders(account: AccountType = "BCF"): HeadersInit {
   return {
@@ -47,48 +42,42 @@ function buildUserMap(users: any[]) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// STAGE MAP
+// GET ALL PIPELINES — returns every pipeline for an account
 // ─────────────────────────────────────────────────────────────
+export async function getAllPipelines(
+  account: AccountType = "BCF"
+): Promise<{ id: string; name: string }[]> {
+  const res = await fetch(
+    `${BASE}/opportunities/pipelines?locationId=${ACCOUNTS[account].locationId}`,
+    { headers: ghlHeaders(account), next: { revalidate: 60 } }
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GHL getAllPipelines ${res.status}: ${txt}`);
+  }
+  const data = await res.json();
+  return (data.pipelines ?? []).map((p: any) => ({ id: p.id, name: p.name }));
+}
 
-const STAGE_MAP: Record<string, StageId> = {
-  // =========================
-  // 🔵 BCF - LEAD
-  // =========================
-  "539b32c9-c336-487c-860f-4c3e72bd592b": "new",
-  "03640705-9f51-4fad-9960-64643455080c": "warm",
-  "bdcc78fb-27e1-43ae-bbe3-846ce11f69d7": "quote",
-  "07f004c2-171c-4b80-9a73-24a75bf89d82": "no_response",
-
-  // =========================
-  // 🟢 BCF - SALES
-  // =========================
-  "03a30a23-a157-4822-aac7-cec971b21894": "deposit",
-  "27573f51-717e-4c31-bc8a-b7f790530f97": "install",
-  "63432c43-59eb-4c8b-ab37-d4681cedfb9c": "scheduled",
-  "cbc54bef-9196-47ac-b86f-2172508bdabc": "won",
-  "90caa9cb-fbdf-4334-a906-a0e46acb67ae": "lost",
-
-  // =========================
-  // 🔵 BGR - LEAD ✅ NEW
-  // =========================
-  "e387947b-974e-4bda-a8bb-f09c1440b411": "new",
-  "0d3f8b03-fec6-4645-968f-18a743d7e7ff": "warm",
-  "7165ab92-e478-4c20-82e1-8a5d3d503e64": "quote",
-  "7abd1803-1126-4781-a3a8-c9d57ba51e07": "no_response",
-
-  // =========================
-  // 🟢 BGR - SALES ✅ NEW
-  // =========================
-  "6ab097e7-5b51-4c05-8ca6-4a78abd36481": "deposit",
-  "b4578cd5-a216-492a-b551-7a5507d88436": "install",
-  "fc40247f-ed65-4027-a2b4-da9310c1a9c9": "scheduled",
-  "1d1d27bb-55a4-468d-9adb-9575863d0d84": "won",
-  "bc0b9333-b61a-4b95-aea3-24a2d3f0b439": "lost",
-};
-
-function mapStage(ghlStageId: string): StageId {
-  if (!ghlStageId) return "new";
-  return STAGE_MAP[ghlStageId] ?? "new";
+// ─────────────────────────────────────────────────────────────
+// GET PIPELINE STAGES — dynamic from GHL
+// ─────────────────────────────────────────────────────────────
+export async function getPipelineStages(
+  pipelineId: string,
+  account: AccountType = "BCF"
+): Promise<{ id: string; name: string; position: number }[]> {
+  const res = await fetch(
+    `${BASE}/opportunities/pipelines?locationId=${ACCOUNTS[account].locationId}`,
+    { headers: ghlHeaders(account), next: { revalidate: 60 } }
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GHL getPipelineStages ${res.status}: ${txt}`);
+  }
+  const data = await res.json();
+  const pipeline = (data.pipelines ?? []).find((p: any) => p.id === pipelineId);
+  const stages: any[] = pipeline?.stages ?? [];
+  return stages.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
 
 function daysSince(iso?: string): number {
@@ -112,9 +101,10 @@ function mapOpportunity(opp: any, userMap: Record<string, string>): Lead {
     email: opp.contact?.email ?? "",
     phone: opp.contact?.phone ?? "",
 
-    stage: mapStage(opp.pipelineStageId),   // UI label
-    stageId: opp.pipelineStageId,           // ✅ REAL GHL ID
+    stage: opp.pipelineStageId ?? "",
+    stageId: opp.pipelineStageId ?? "",
 
+    assignedToId: opp.assignedTo ?? "",
     assignedTo:
       userMap[opp.assignedTo] ||
       opp.assignedTo?.name ||
@@ -201,22 +191,15 @@ export async function getOpportunities(
     throw new Error(`GHL getOpportunities ${oppRes.status}: ${txt}`);
   }
 
-  if (!userRes.ok) {
-    const txt = await userRes.text();
-    throw new Error(`GHL getUsers ${userRes.status}: ${txt}`);
+  const oppData = await oppRes.json();
+
+  // Non-fatal: if the users endpoint fails, leads still load with "Unassigned"
+  let userMap: Record<string, string> = {};
+  if (userRes.ok) {
+    const userData = await userRes.json();
+    userMap = buildUserMap(userData.users || []);
   }
 
-  const oppData = await oppRes.json();
-  const userData = await userRes.json();
-oppData.opportunities.forEach((o: any) => {
-  console.log("STAGE DEBUG:", {
-    name: o.name,
-    stageId: o.pipelineStageId,
-  });
-});
-  const userMap = buildUserMap(userData.users || []);
-  console.log("RAW OPPS:", oppData.opportunities);
-  
   return (oppData.opportunities ?? []).map((o: any) =>
     mapOpportunity(o, userMap)
   );
@@ -324,8 +307,6 @@ export async function createOpportunity(
     assignedTo: payload.assignedTo || undefined, 
   };
 
-  console.log("CREATE OPPORTUNITY PAYLOAD:", body); // 🔥 debug
-
   const res = await fetch(`${BASE}/opportunities/`, {
     method: "POST",
     headers: ghlHeaders(account),
@@ -334,7 +315,6 @@ export async function createOpportunity(
 
   if (!res.ok) {
     const txt = await res.text();
-    console.error("GHL ERROR RESPONSE:", txt);
     throw new Error(`GHL createOpportunity ${res.status}: ${txt}`);
   }
 
@@ -376,10 +356,8 @@ export async function getTeam(
     { headers: ghlHeaders(account), next: { revalidate: 300 } }
   );
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`GHL getUsers ${res.status}: ${txt}`);
-  }
+  // Non-fatal: return empty team if endpoint is unavailable
+  if (!res.ok) return [];
 
   const data = await res.json();
 
@@ -401,27 +379,28 @@ export async function getDashboardStats(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<DashboardStats> {
+  if (!pipelineId) throw new Error("pipelineId is required");
 
-  const opps = await getOpportunities(pipelineId, account);// ✅ FIX
+  const [opps, pipelineStages] = await Promise.all([
+    getOpportunities(pipelineId, account),
+    getPipelineStages(pipelineId, account),
+  ]);
+
+  const nameMap: Record<string, string> = {};
+  for (const s of pipelineStages) nameMap[s.id] = s.name.toLowerCase();
+  const n = (id: string) => nameMap[id] ?? "";
+
   const today = new Date().toDateString();
+  const wonOpps = opps.filter(o => n(o.stage).includes("won") || n(o.stage).includes("complet"));
 
   return {
-    newLeadsToday: opps.filter(
-      o => new Date(o.lastActivity).toDateString() === today
-    ).length,
-
-    contacted: opps.filter(o => o.stage === "warm").length,
-    quoted: opps.filter(o => o.stage === "quote").length,
-    followUps: opps.filter(o => o.stage === "no_response").length,
-    closedDeals: opps.filter(o => o.stage === "won").length,
-
+    newLeadsToday: opps.filter(o => new Date(o.lastActivity).toDateString() === today).length,
+    contacted: opps.filter(o => n(o.stage).includes("warm")).length,
+    quoted: opps.filter(o => n(o.stage).includes("quote")).length,
+    followUps: opps.filter(o => n(o.stage).includes("no response") || n(o.stage).includes("retarget")).length,
+    closedDeals: wonOpps.length,
     totalPipelineValue: opps.reduce((s, o) => s + o.value, 0),
-
-    conversionRate: opps.length
-      ? Math.round(
-          (opps.filter(o => o.stage === "won").length / opps.length) * 100
-        )
-      : 0,
+    conversionRate: opps.length ? Math.round((wonOpps.length / opps.length) * 100) : 0,
   };
 }
 
@@ -432,17 +411,26 @@ export async function getActivity(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<ActivityItem[]> {
+  if (!pipelineId) return [];
 
-  const opps = await getOpportunities(pipelineId, account); // ✅
+  const [opps, pipelineStages] = await Promise.all([
+    getOpportunities(pipelineId, account),
+    getPipelineStages(pipelineId, account),
+  ]);
+
+  const nameMap: Record<string, string> = {};
+  for (const s of pipelineStages) nameMap[s.id] = s.name.toLowerCase();
+  const n = (id: string) => nameMap[id] ?? "";
+
   return opps
     .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
     .slice(0, 10)
     .map((o, i): ActivityItem => ({
       id:        `act_${i}`,
       type:
-          o.stage === "won" ? "closed"
-          : o.stage === "quote" ? "quoted"
-          : o.stage === "no_response" ? "follow_up"
+          n(o.stage).includes("won") || n(o.stage).includes("complet") ? "closed"
+          : n(o.stage).includes("quote") ? "quoted"
+          : n(o.stage).includes("no response") || n(o.stage).includes("retarget") ? "follow_up"
           : "contacted",
       leadName:  o.name,
       actor:     o.assignedTo,
@@ -457,10 +445,19 @@ export async function getAlerts(
   pipelineId?: string,
   account: AccountType = "BCF"
 ): Promise<FollowUpAlert[]> {
+  if (!pipelineId) return [];
 
-  const opps = await getOpportunities(pipelineId, account); // ✅
+  const [opps, pipelineStages] = await Promise.all([
+    getOpportunities(pipelineId, account),
+    getPipelineStages(pipelineId, account),
+  ]);
+
+  const nameMap: Record<string, string> = {};
+  for (const s of pipelineStages) nameMap[s.id] = s.name.toLowerCase();
+  const n = (id: string) => nameMap[id] ?? "";
+
   return opps
-    .filter(o => o.stage === "no_response" && o.daysInStage >= 1)
+    .filter(o => (n(o.stage).includes("no response") || n(o.stage).includes("retarget")) && o.daysInStage >= 1)
     .sort((a, b) => b.daysInStage - a.daysInStage)
     .map((o, i): FollowUpAlert => ({
       id:          `alert_${i}`,

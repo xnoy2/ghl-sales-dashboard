@@ -1,43 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation"; // ✅ ADD
+import { useRouter } from "next/navigation";
 import QuickActions from "./QuickActions";
 import AddLeadModal from "./AddLeadModal";
 import type { PipelineStage } from "@/types";
 
 export default function DashboardClient({
   stages,
-  pipeline,
+  pipeline: _pipeline,
   pipelineId,
+  account: _account,
+  locationId,
 }: {
   stages: PipelineStage[];
-  pipeline: "LEAD" | "SALES";
+  pipeline: string;
   pipelineId: string;
+  account: string;
+  locationId: string;
 }) {
   const [addOpen, setAddOpen] = useState(false);
-  const router = useRouter(); // ✅ ADD
+  const router = useRouter();
 
-  function handleAddLead(newLead: any) {
+  function handleAddLead(_newLead: any) {
     setAddOpen(false);
-
-    // 🔥 AUTO REFRESH AFTER ADD
     router.refresh();
   }
 
   return (
     <>
-      <QuickActions onAddLead={() => setAddOpen(true)} />
+      <QuickActions
+        onAddLead={() => setAddOpen(true)}
+        locationId={locationId}
+        pipelineId={pipelineId}
+      />
 
       {addOpen && (
         <AddLeadModal
-          stages={stages.map((s) => ({
-            label: s.label,
-            value: s.id,
-          }))}
+          stages={stages.map((s) => ({ label: s.label, value: s.id }))}
           pipelineId={pipelineId}
           onClose={() => setAddOpen(false)}
-          onCreated={handleAddLead} // ✅ already wired
+          onCreated={handleAddLead}
         />
       )}
     </>

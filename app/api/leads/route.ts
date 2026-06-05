@@ -96,11 +96,6 @@ export async function POST(req: Request) {
     let opp;
 
 try {
-  console.log("CREATE OPP DEBUG:", {
-  account,
-  pipelineId,
-  stageId: finalStageId,
-});
   opp = await createOpportunity(
     {
       contactId,

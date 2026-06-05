@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-import { STAGE_MAP } from "@/lib/stageMap";
-import { USER_MAP } from "@/lib/users";
 import { CURRENCY } from "@/lib/currency";
 
 export default function AddLeadModal({
@@ -26,11 +24,6 @@ export default function AddLeadModal({
 
   const pipeline =
     searchParams.get("pipeline") === "SALES" ? "SALES" : "LEAD";
-
-  // ✅ THEN USE
-  const stageOptions = STAGE_MAP[account][pipeline];
-
-  const userOptions = USER_MAP[account];
 
   // ❌ DO NOT redefine pipelineId
 
@@ -207,8 +200,8 @@ console.log("DEBUG:", {
         >
           <option value="">Select stage</option>
 
-          {stageOptions.map((s) => (
-            <option key={s.id} value={s.id}>
+          {stages.map((s: { label: string; value: string }) => (
+            <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}

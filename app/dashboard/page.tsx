@@ -1,14 +1,14 @@
 import DashboardClient from "@/components/dashboard/DashboardClient";
 import PipelineSwitcher from "@/components/dashboard/PipelineSwitcher";
-import { headers } from "next/headers";
 export const dynamic = "force-dynamic";
 
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
-  getDashboardStats,
+  getAllPipelines,
   getOpportunities,
+  getPipelineStages,
   getTeam,
   getActivity,
   getAlerts,
@@ -19,128 +19,76 @@ import TeamActivity from "@/components/dashboard/TeamActivity";
 import AlertsPanel from "@/components/dashboard/AlertsPanel";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import type { PipelineStage } from "@/types";
-import { ACCOUNTS } from "@/lib/accounts"; // ✅ NEW
 import PipelineBoard from "@/components/dashboard/PipelineBoard";
-import { STAGE_MAP } from "@/lib/stageMap"; // adjust path if needed
+import { ACCOUNTS } from "@/lib/accounts";
+
+const STAGE_COLORS = [
+  { color: "bg-blue-500",   textColor: "text-blue-600",   borderColor: "border-blue-200" },
+  { color: "bg-orange-500", textColor: "text-orange-600", borderColor: "border-orange-200" },
+  { color: "bg-green-500",  textColor: "text-green-600",  borderColor: "border-green-200" },
+  { color: "bg-gray-400",   textColor: "text-gray-600",   borderColor: "border-gray-200" },
+  { color: "bg-yellow-500", textColor: "text-yellow-600", borderColor: "border-yellow-200" },
+  { color: "bg-purple-500", textColor: "text-purple-600", borderColor: "border-purple-200" },
+  { color: "bg-red-500",    textColor: "text-red-600",    borderColor: "border-red-200" },
+  { color: "bg-teal-500",   textColor: "text-teal-600",   borderColor: "border-teal-200" },
+];
 
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pipeline?: string; account?: string }>;
+  searchParams: Promise<{ pipelineId?: string; account?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const params = await searchParams;
 
-  // ✅ PIPELINE
-  const pipeline =
-    params?.pipeline === "SALES" ? "SALES" : "LEAD";
+  const account = params?.account === "BGR" ? "BGR" : "BCF";
 
-  // ✅ ACCOUNT (NEW)
-  const account =
-    params?.account === "BGR" ? "BGR" : "BCF";
+  // Fetch all pipelines for this account first (cached 60s by Next.js)
+  const allPipelines = await getAllPipelines(account);
 
-  const config = ACCOUNTS[account];
+  // Use the pipelineId from the URL, or default to the first available pipeline
+  const pipelineId = params?.pipelineId || allPipelines[0]?.id;
 
-  // ✅ DYNAMIC PIPELINE ID (BASED ON ACCOUNT)
-  const pipelineId =
-    pipeline === "SALES"
-      ? config.pipelines.SALES
-      : config.pipelines.LEAD;
+  if (!pipelineId) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500">No pipelines found for this account.</p>
+      </div>
+    );
+  }
 
-  console.log("ACCOUNT:", account);
-  console.log("PIPELINE:", pipeline);
-  console.log("PIPELINE ID:", pipelineId);
+  const currentPipeline = allPipelines.find((p) => p.id === pipelineId) ?? allPipelines[0];
 
-  // ✅ FETCH DATA (NOW WITH ACCOUNT)
-  const [stats, leads, team, activity, alerts] = await Promise.all([
-    getDashboardStats(pipelineId, account),
+  // Fetch everything in parallel
+  const [leads, ghlStages, team, activity, alerts] = await Promise.all([
     getOpportunities(pipelineId, account),
-    getTeam(),
+    getPipelineStages(pipelineId, account),
+    getTeam(account),
     getActivity(pipelineId, account),
     getAlerts(pipelineId, account),
   ]);
 
-  const PIPELINE_STAGES: Record<
-    "LEAD" | "SALES",
-    Omit<PipelineStage, "leads">[]
-  > = {
-    LEAD: [
-      {
-        id: "new",
-        label: "New Lead",
-        color: "bg-blue-500",
-        textColor: "text-blue-600",
-        borderColor: "border-blue-200",
-      },
-      {
-        id: "warm",
-        label: "Warm",
-        color: "bg-orange-500",
-        textColor: "text-orange-600",
-        borderColor: "border-orange-200",
-      },
-      {
-        id: "quote",
-        label: "Quote Sent",
-        color: "bg-green-500",
-        textColor: "text-green-600",
-        borderColor: "border-green-200",
-      },
-      {
-        id: "no_response",
-        label: "No Response",
-        color: "bg-gray-400",
-        textColor: "text-gray-600",
-        borderColor: "border-gray-200",
-      },
-    ],
+  // Count open opportunities per team member for this pipeline
+  const dealCounts: Record<string, number> = {};
+  for (const lead of leads) {
+    if (lead.assignedToId) {
+      dealCounts[lead.assignedToId] = (dealCounts[lead.assignedToId] ?? 0) + 1;
+    }
+  }
+  const teamWithDeals = team.map((m) => ({
+    ...m,
+    deals: dealCounts[m.id] ?? 0,
+  }));
 
-    SALES: [
-      {
-        id: "deposit",
-        label: "Deposit Taken",
-        color: "bg-yellow-500",
-        textColor: "text-yellow-600",
-        borderColor: "border-yellow-200",
-      },
-      {
-        id: "install",
-        label: "Install Needed",
-        color: "bg-purple-500",
-        textColor: "text-purple-600",
-        borderColor: "border-purple-200",
-      },
-      {
-        id: "scheduled",
-        label: "Installation Scheduled",
-        color: "bg-green-600",
-        textColor: "text-green-700",
-        borderColor: "border-green-300",
-      },
-      {
-        id: "won",
-        label: "Completed",
-        color: "bg-blue-600",
-        textColor: "text-blue-700",
-        borderColor: "border-blue-300",
-      },
-      {
-        id: "lost",
-        label: "Lost",
-        color: "bg-red-500",
-        textColor: "text-red-600",
-        borderColor: "border-red-200",
-      },
-    ],
-  };
-
-  // ✅ MAP LEADS
-  const stages = PIPELINE_STAGES[pipeline].map((s) => ({
-    ...s,
-    leads: leads.filter((l) => l.stage === s.id),
+  // Build stage columns from GHL data — colors assigned by position
+  const stages: PipelineStage[] = ghlStages.map((s, i) => ({
+    id: s.id,
+    label: s.name,
+    ...STAGE_COLORS[i % STAGE_COLORS.length],
+    leads: leads.filter((l) => l.stageId === s.id),
   }));
 
   return (
@@ -149,43 +97,46 @@ export default async function DashboardPage({
 
       <main className="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
 
-        {/* 🔥 PIPELINE + ACCOUNT SWITCH */}
-        <div className="flex gap-2">
-          <PipelineSwitcher />
-        </div>
+        {/* PIPELINE + ACCOUNT SWITCHER */}
+        <PipelineSwitcher
+          pipelines={allPipelines}
+          currentPipelineId={pipelineId}
+        />
 
-        {/* KPI */}
-        {/* KPI */}
+        {/* KPI CARDS */}
         <StatGrid stages={stages} />
 
-        {/* Pipeline */}
+        {/* PIPELINE BOARD */}
         <section>
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
-            {pipeline === "LEAD" ? "Lead Pipeline" : "Sales Pipeline"}
+            {currentPipeline?.name ?? "Pipeline"}
           </h2>
 
           <PipelineBoard
             stages={stages}
-            pipeline={pipeline}
-            pipelineId={pipelineId} // ✅ CRITICAL
+            pipeline="LEAD"
+            pipelineId={pipelineId}
+            account={account}
           />
         </section>
 
-        {/* Bottom */}
+        {/* TEAM + ALERTS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <TeamActivity team={team} />
+          <TeamActivity team={teamWithDeals} />
           <AlertsPanel alerts={alerts} />
         </div>
 
-        {/* Activity */}
+        {/* ACTIVITY FEED */}
         <ActivityFeed items={activity} />
 
-        {/* Actions (ONLY modal + buttons) */}
+        {/* QUICK ACTIONS / ADD LEAD MODAL */}
         <DashboardClient
-        stages={stages}
-        pipeline={pipeline}
-        pipelineId={pipelineId} // ✅ ADD THIS
-      />
+          stages={stages}
+          pipeline="LEAD"
+          pipelineId={pipelineId}
+          account={account}
+          locationId={ACCOUNTS[account].locationId}
+        />
       </main>
     </div>
   );

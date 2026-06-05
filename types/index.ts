@@ -20,6 +20,7 @@ export interface Lead {
   stage: string;      // UI (optional)
   stageId: string;    // ✅ ADD THIS (GHL UUID)
   assignedTo: string;
+  assignedToId: string;
   value: number;
   lastActivity: string;     // ISO date string
   tags: string[];
@@ -27,7 +28,7 @@ export interface Lead {
 }
 
 export interface PipelineStage {
-  id: StageId;
+  id: string;
   label: string;
   color: string;             // tailwind bg class
   textColor: string;         // tailwind text class

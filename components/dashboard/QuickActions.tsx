@@ -1,56 +1,64 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Plus, LayoutList, MessageSquare, Calendar } from "lucide-react";
-import AddLeadModal from "./AddLeadModal";
-
 
 export default function QuickActions({
   onAddLead,
+  locationId,
+  pipelineId,
 }: {
   onAddLead: () => void;
+  locationId: string;
+  pipelineId: string;
 }) {
-  const [addOpen, setAddOpen] = useState(false);
+  const base = `https://app.gohighlevel.com/v2/location/${locationId}`;
 
   return (
-    <>
-      <div className="flex flex-wrap gap-3 pb-6">
-       <button
+    <div className="flex flex-wrap gap-3 pb-6">
+
+      {/* Add New Lead */}
+      <button
         onClick={onAddLead}
-        className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-3 py-2 rounded-lg shadow-sm hover:shadow transition flex items-center gap-2"
+        className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-4 py-2 rounded-lg shadow-sm hover:shadow transition flex items-center gap-2 text-sm"
       >
         <Plus className="w-4 h-4" />
         Add New Lead
       </button>
 
-        <Link
-        href="https://app.gohighlevel.com/v2/location/GSxspezlKiWYWE604ot9/opportunities/list"
+      {/* View Full Pipeline — opens GHL Opportunities for the current account + pipeline */}
+      <Link
+        href={`${base}/opportunities/list?pipeline_id=${pipelineId}`}
         target="_blank"
-        className="btn-secondary flex items-center gap-2"
+        rel="noopener noreferrer"
+        className="btn-secondary flex items-center gap-2 text-sm"
       >
         <LayoutList className="w-4 h-4" />
         View Full Pipeline
       </Link>
 
-        <Link
-        href="https://app.gohighlevel.com/v2/location/GSxspezlKiWYWE604ot9/opportunities/list"
+      {/* Open Conversations — opens GHL Conversations inbox */}
+      <Link
+        href={`${base}/conversations`}
         target="_blank"
-        className="btn-secondary flex items-center gap-2"
+        rel="noopener noreferrer"
+        className="btn-secondary flex items-center gap-2 text-sm"
       >
-        <LayoutList className="w-4 h-4" />
+        <MessageSquare className="w-4 h-4" />
         Open Conversations
       </Link>
 
-        <Link
-        href="https://app.gohighlevel.com/v2/location/GSxspezlKiWYWE604ot9/calendars/view?user_ids=xxhSEdopuQAEAwsJkVCR,HQBHMm3FEMZz2ki2ddV4,mLLHxoKMRQhsIV9hv9dR,FrnTIMv2U9gqbD0yIQNr,jCNushzFdbrAzn1iiLsU,opXAjfdffILLO1cdxe7W,xVLgQGTpPpHhNbWxMtns,LWJNKLN7L02j0NUENAWN,DsyHyyCyfbI7FtemxOGI,PqyjQynNOkxtChaP9eOK"
+      {/* View Calendar — opens GHL Calendar */}
+      <Link
+        href={`${base}/calendars/view`}
         target="_blank"
-        className="btn-secondary flex items-center gap-2"
+        rel="noopener noreferrer"
+        className="btn-secondary flex items-center gap-2 text-sm"
       >
-        <LayoutList className="w-4 h-4" />
+        <Calendar className="w-4 h-4" />
         View Calendar
       </Link>
-      </div>
-    </>
+
+    </div>
   );
 }

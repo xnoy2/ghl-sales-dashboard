@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
 import { getOpportunities } from "@/lib/ghl";
+import type { AccountType } from "@/lib/accounts";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const pipeline = searchParams.get("pipeline");
+    const pipelineId = searchParams.get("pipelineId");
+    const account = (searchParams.get("account") || "BCF") as AccountType;
 
-    const pipelineId =
-      pipeline === "SALES"
-        ? process.env.SALES_PIPELINE_ID
-        : process.env.LEAD_PIPELINE_ID;
+    if (!pipelineId) {
+      return NextResponse.json({ error: "pipelineId is required" }, { status: 400 });
+    }
 
-    const leads = await getOpportunities(pipelineId!);
-
+    const leads = await getOpportunities(pipelineId, account);
     return NextResponse.json({ leads });
-  } catch (err) {
-    console.error("FETCH PIPELINE ERROR:", err);
-    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
+  } catch (err: any) {
+    console.error("GET OPPORTUNITIES ERROR:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

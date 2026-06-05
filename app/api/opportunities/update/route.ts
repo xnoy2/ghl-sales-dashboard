@@ -34,15 +34,7 @@ export async function PUT(req: Request) {
 
     const id = opportunityId;
 
-    console.log("🔥 FINAL UPDATE REQUEST:", {
-      id,
-      stageId,
-      value,
-      pipelineId,
-      account,
-    });
-
-    // ✅ UPDATE OPPORTUNITY
+    // Update opportunity in GHL
     const res = await fetch(
       `https://services.leadconnectorhq.com/opportunities/${id}`,
       {
@@ -72,8 +64,6 @@ export async function PUT(req: Request) {
     } catch {
       data = await res.text();
     }
-
-    console.log("✅ GHL RESPONSE:", data);
 
     if (!res.ok) {
       return NextResponse.json(
