@@ -4,17 +4,20 @@ import { pusherServer } from "@/lib/pusher";
 
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    // Optional auth: if WEBHOOK_SECRET is set, require ?secret= to match.
+    // Until you set it, the endpoint stays open so existing workflows work.
+    const reqUrl = new URL(req.url);
+    const requiredSecret = process.env.WEBHOOK_SECRET;
+    if (requiredSecret && reqUrl.searchParams.get("secret") !== requiredSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Temporary: log the raw shape so we can confirm GHL's field names in
-    // Vercel logs during first tests. Safe to remove once verified.
-    console.log("[GHL webhook] payload:", JSON.stringify(payload).slice(0, 800));
+    const payload = await req.json();
 
     // Event type: native webhooks send `type` in the body; GHL workflow
     // webhooks don't, so we also accept it from the URL (?type=...).
-    const url = new URL(req.url);
     const event =
-      payload.type ?? payload.event_type ?? url.searchParams.get("type") ?? "unknown";
+      payload.type ?? payload.event_type ?? reqUrl.searchParams.get("type") ?? "unknown";
 
     // Extract names — tolerant of both native (nested/camelCase) and
     // workflow (flat/snake_case) GHL payload shapes.

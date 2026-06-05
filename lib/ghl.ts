@@ -180,7 +180,9 @@ export async function getOpportunities(
   const [oppRes, userRes] = await Promise.all([
     fetch(`${BASE}/opportunities/search?${params}`, {
       headers: ghlHeaders(account),
-      next: { revalidate: 30 },
+      // Live data: always fetch fresh so newly added/moved leads show
+      // immediately on refresh (page is force-dynamic anyway).
+      cache: "no-store",
     }),
     fetch(`${BASE}/users/?locationId=${ACCOUNTS[account].locationId}`, {
     headers: ghlHeaders(account),

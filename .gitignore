@@ -6,6 +6,7 @@ node_modules/
 out/
 .DS_Store
 *.pem
+*.tsbuildinfo
 node_modules
 .next
 

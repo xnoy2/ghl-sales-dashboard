@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { CURRENCY } from "@/lib/currency";
@@ -38,12 +38,17 @@ export default function AddLeadModal({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Synchronous guard: blocks a second submit before React re-renders the
+  // disabled button, which would otherwise create a duplicate opportunity.
+  const submittingRef = useRef(false);
 
   async function handleSubmit() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     setLoading(true);
     setError("");
 
-    // 🔥 LOADING TOAST
     const toastId = toast.loading("Creating lead...");
 
     try {
@@ -59,30 +64,10 @@ export default function AddLeadModal({
         throw new Error("Please select a stage");
       }
 
-      const tempLead = {
-        id: "temp-" + Date.now(),
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        value: Number(form.value || 0),
-        stage: form.stageId,
-        assignedTo: "You",
-        lastActivity: new Date().toISOString(),
-        tags: form.tags
-          ? form.tags.split(",").map((t) => t.trim())
-          : [],
-        daysInStage: 0,
-      };
-console.log("DEBUG:", {
-  account,
-  pipeline,
-  pipelineId,
-});
+      const tags = form.tags
+        ? form.tags.split(",").map((t) => t.trim()).filter(Boolean)
+        : [];
 
-      // ✅ INSTANT UI UPDATE
-      onCreated?.(tempLead);
-
-      // 🚀 API CALL
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: {
@@ -95,7 +80,7 @@ console.log("DEBUG:", {
           value: Number(form.value || 0),
           stageId: form.stageId,
           pipelineId,
-          tags: form.tags ? [form.tags] : [],
+          tags,
           account,
         }),
       });
@@ -106,23 +91,32 @@ console.log("DEBUG:", {
         throw new Error(data.error || "Failed to create lead");
       }
 
-      // ✅ SUCCESS TOAST
+      // Reconcile the UI only after creation succeeds, using the real GHL id.
+      onCreated?.({
+        id: data.lead?.id ?? "temp-" + Date.now(),
+        contactId: data.lead?.contactId ?? "",
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        value: Number(form.value || 0),
+        stage: form.stageId,
+        stageId: form.stageId,
+        assignedToId: "",
+        assignedTo: "You",
+        lastActivity: new Date().toISOString(),
+        tags,
+        daysInStage: 0,
+      });
+
       toast.success("Lead added successfully", { id: toastId });
-
-      // ✅ CLOSE MODAL
-      setTimeout(() => {
-        onClose();
-      }, 500);
-
+      onClose();
     } catch (err: any) {
       console.error("ADD LEAD ERROR:", err);
-      console.log("SENDING STAGE:", form.stageId);
-      // ❌ ERROR TOAST
       toast.error(err.message || "Failed to add lead", { id: toastId });
-
       setError(err.message || "Failed to add lead");
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 

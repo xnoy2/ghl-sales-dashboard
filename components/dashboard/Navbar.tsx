@@ -14,6 +14,8 @@ type Notification = {
   createdAt: number;
 };
 
+const STORAGE_KEY = "ghl-notifications";
+
 function timeAgo(ms: number): string {
   const diff = Math.floor((Date.now() - ms) / 1000);
   if (diff < 60) return "Just now";
@@ -46,13 +48,25 @@ export default function Navbar({ user }: { user: AppUser }) {
     if (open) setUnreadCount(0);
   }, [open]);
 
-  // Load stored notifications on mount
+  // Load stored notifications on mount (localStorage = reliable per-browser
+  // history; the old server store was per-serverless-instance and unreliable).
   useEffect(() => {
-    fetch("/api/notifications")
-      .then((r) => r.json())
-      .then((data) => setNotifications(Array.isArray(data) ? data : []))
-      .catch(() => {});
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setNotifications(JSON.parse(raw));
+    } catch {
+      /* ignore corrupt storage */
+    }
   }, []);
+
+  // Persist whenever the list changes (add / dismiss / clear)
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+    } catch {
+      /* ignore quota / private-mode errors */
+    }
+  }, [notifications]);
 
   // Pusher — real-time GHL events
   useEffect(() => {
@@ -87,7 +101,7 @@ export default function Navbar({ user }: { user: AppUser }) {
             </button>
           </div>
         ),
-        { duration: 6000, icon: "🔔" }
+        { duration: 10000, icon: "🔔" }
       );
     });
 
@@ -96,9 +110,8 @@ export default function Navbar({ user }: { user: AppUser }) {
     };
   }, [router]);
 
-  async function handleClearAll() {
-    await fetch("/api/notifications", { method: "DELETE" });
-    setNotifications([]);
+  function handleClearAll() {
+    setNotifications([]); // persist effect clears localStorage
     setUnreadCount(0);
   }
 
