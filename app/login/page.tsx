@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Loader2, BarChart3, Eye, EyeOff } from "lucide-react";
@@ -12,6 +12,19 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Splash intro: show a branded boot screen, then cross-fade into the form.
+  const [showForm, setShowForm] = useState(false);   // mount form + begin splash fade
+  const [splashGone, setSplashGone] = useState(false); // unmount splash entirely
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setShowForm(true), 1600);
+    const t2 = setTimeout(() => setSplashGone(true), 2200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +50,7 @@ export default function LoginPage() {
         <div className="absolute -bottom-24 left-1/4 w-96 h-96 rounded-full bg-violet-300/30 blur-3xl animate-blob [animation-delay:12s]" />
       </div>
 
+      {showForm && (
       <div className="relative w-full max-w-sm animate-scale-in">
 
         {/* Logo */}
@@ -115,6 +129,27 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
+      )}
+
+      {/* Splash intro overlay — cross-fades out as the form mounts */}
+      {!splashGone && (
+        <div
+          className={`absolute inset-0 z-50 flex flex-col items-center justify-center gap-6
+                      bg-gradient-to-br from-slate-50 via-white to-blue-50
+                      transition-opacity duration-500 ${showForm ? "opacity-0" : "opacity-100"}`}
+        >
+          <div className="flex items-center gap-3 animate-scale-in">
+            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center
+                            shadow-lg shadow-blue-600/30 animate-float">
+              <BarChart3 className="w-7 h-7 text-white" />
+            </div>
+            <span className="text-2xl font-semibold text-slate-900">GHL SalesPipeline</span>
+          </div>
+          <div className="w-40 h-1 bg-slate-200 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 animate-load-bar" />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

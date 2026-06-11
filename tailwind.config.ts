@@ -33,6 +33,7 @@ const config: Config = {
         "float": "float 6s ease-in-out infinite",
         "blob": "blob 20s ease-in-out infinite",
         "drift": "drift 10s ease-in-out infinite",
+        "load-bar": "loadBar 1.6s ease-in-out forwards",
       },
       keyframes: {
         fadeIn:   { from: { opacity: "0" },                          to: { opacity: "1" } },
@@ -49,6 +50,7 @@ const config: Config = {
           "0%,100%": { transform: "translateY(0px) translateX(0px)" },
           "50%":     { transform: "translateY(-24px) translateX(8px)" },
         },
+        loadBar: { from: { width: "0%" }, to: { width: "100%" } },
       },
     },
   },
